@@ -5,16 +5,18 @@ const W = 1000, H = 600
 const COLORS = [['#111111', '검정'], ['#d64545', '빨강'], ['#2f6fd6', '파랑'], ['#2f7d4f', '초록']]
 const SIZES = [['가늘게', 3], ['보통', 6], ['굵게', 12]]
 
-// 같이 쓰는 칠판. 그린 선을 Supabase Realtime으로 상대 화면에 바로 보냅니다.
+// 영상 수업 안에서 같이 쓰는 칠판. 그린 선을 Supabase Realtime으로 상대 화면에 바로 보냅니다.
 // 서버에 저장되지 않으며, 두 사람이 모두 칠판을 열어 둬야 서로 보여요.
-export default function Whiteboard({ appId }) {
-  const [open, setOpen] = useState(false)
+export default function Whiteboard({ appId, hidden = false }) {
   const [tool, setTool] = useState('pen')
   const [color, setColor] = useState(COLORS[0][0])
   const [size, setSize] = useState(6)
   const [msg, setMsg] = useState('')
   const canvasRef = useRef(null)
-  const live = useRef({ strokes: [], cur: null, channel: null, id: '', n: 0, timer: null })
+  const live = useRef(null)
+  if (!live.current) {
+    live.current = { strokes: [], cur: null, channel: null, id: crypto.randomUUID().slice(0, 8), n: 0, timer: null }
+  }
   const tools = useRef({})
   tools.current = { tool, color, size }
 
@@ -78,9 +80,8 @@ export default function Whiteboard({ appId }) {
     }
   }
 
-  // 칠판을 열면 채널에 접속
+  // 칠판이 화면에 나타나면 채널에 접속 (영상 통화를 나가면 사라지며 접속 종료)
   useEffect(() => {
-    if (!open) return
     const L = live.current
     redraw()
     const ch = supabase.channel(`board-${appId}`, { config: { broadcast: { self: false } } })
@@ -88,20 +89,10 @@ export default function Whiteboard({ appId }) {
     ch.on('broadcast', { event: 'board' }, ({ payload }) => onBoard(payload))
     ch.subscribe((status) => {
       if (status === 'SUBSCRIBED') send({ type: 'join' })
-      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') setMsg('칠판 서버에 접속하지 못했어요. 잠시 후 다시 열어 주세요.')
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') setMsg('칠판 서버에 접속하지 못했어요. 영상 수업을 나갔다가 다시 들어와 주세요.')
     })
-    return () => { supabase.removeChannel(ch); L.channel = null }
-  }, [open, appId])
-
-  useEffect(() => () => clearTimeout(live.current.timer), [])
-
-  const openBoard = () => {
-    const L = live.current
-    L.id = crypto.randomUUID().slice(0, 8)
-    L.strokes = []; L.cur = null; L.n = 0
-    setMsg('')
-    setOpen(true)
-  }
+    return () => { clearTimeout(L.timer); supabase.removeChannel(ch); L.channel = null }
+  }, [appId])
 
   // 화면 좌표를 칠판 좌표(1000x600)로 변환
   const pos = (e) => {
@@ -174,45 +165,27 @@ export default function Whiteboard({ appId }) {
   }
 
   return (
-    <div className="card wb">
-      <div className="app-top">
-        <h3 style={{ margin: 0 }}>🖍 같이 쓰는 칠판</h3>
-        {open
-          ? <button className="btn ghost sm" onClick={() => setOpen(false)}>칠판 닫기</button>
-          : <button className="btn sm" onClick={openBoard}>칠판 열기</button>}
+    <div className={`wbe ${hidden ? 'hide' : ''}`}>
+      <div className="wbbar">
+        <button className="btn ghost sm" aria-pressed={tool === 'pen'} onClick={() => setTool('pen')}>✏️ 펜</button>
+        <button className="btn ghost sm" aria-pressed={tool === 'eraser'} onClick={() => setTool('eraser')}>🧽 지우개</button>
+        {COLORS.map(([c, name]) => (
+          <button key={c} className="sw" style={{ background: c }} aria-label={name} aria-pressed={color === c && tool === 'pen'}
+            onClick={() => { setColor(c); setTool('pen') }} />
+        ))}
+        <select value={size} onChange={(e) => setSize(Number(e.target.value))} aria-label="굵기">
+          {SIZES.map(([n, v]) => <option key={v} value={v}>{n}</option>)}
+        </select>
+        <button className="btn ghost sm" onClick={undo}>↩ 되돌리기</button>
+        <button className="btn ghost sm" onClick={clearAll}>🗑 전체 지우기</button>
+        <button className="btn ghost sm" onClick={savePng}>💾 이미지 저장</button>
       </div>
-
-      {!open && (
-        <p className="muted" style={{ margin: '8px 0 0' }}>
-          두 사람이 각자 <strong>칠판 열기</strong>를 누르면 같은 칠판에 함께 그릴 수 있어요. 휴대폰이나 태블릿 펜으로도 쓸 수 있어요.
-          칠판 내용은 서버에 저장되지 않아서, 필요하면 <strong>이미지 저장</strong>을 눌러 보관하세요.
-        </p>
-      )}
-      {msg && <div className="err" role="alert" style={{ marginTop: 8 }}>{msg}</div>}
-
-      {open && (
-        <>
-          <div className="wbbar">
-            <button className="btn ghost sm" aria-pressed={tool === 'pen'} onClick={() => setTool('pen')}>✏️ 펜</button>
-            <button className="btn ghost sm" aria-pressed={tool === 'eraser'} onClick={() => setTool('eraser')}>🧽 지우개</button>
-            {COLORS.map(([c, name]) => (
-              <button key={c} className="sw" style={{ background: c }} aria-label={name} aria-pressed={color === c && tool === 'pen'}
-                onClick={() => { setColor(c); setTool('pen') }} />
-            ))}
-            <select value={size} onChange={(e) => setSize(Number(e.target.value))} aria-label="굵기">
-              {SIZES.map(([n, v]) => <option key={v} value={v}>{n}</option>)}
-            </select>
-            <button className="btn ghost sm" onClick={undo}>↩ 되돌리기</button>
-            <button className="btn ghost sm" onClick={clearAll}>🗑 전체 지우기</button>
-            <button className="btn ghost sm" onClick={savePng}>💾 이미지 저장</button>
-          </div>
-          <canvas ref={canvasRef} width={W} height={H} className="wbc"
-            onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} />
-          <p className="muted" style={{ margin: '8px 0 0' }}>
-            상대방이 칠판을 열면 같은 그림이 보여요. 이름·연락처 같은 개인정보는 쓰지 마세요.
-          </p>
-        </>
-      )}
+      {msg && <div className="err" role="alert">{msg}</div>}
+      <canvas ref={canvasRef} width={W} height={H} className="wbc"
+        onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} />
+      <p className="muted" style={{ margin: '8px 0 0' }}>
+        칠판 내용은 서버에 저장되지 않아요. 필요하면 <strong>이미지 저장</strong>을 눌러 보관하세요. 개인정보는 쓰지 마세요.
+      </p>
     </div>
   )
-}
+} 

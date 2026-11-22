@@ -1,18 +1,21 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import Whiteboard from './Whiteboard'
 
 // 공개 STUN 서버 (서로의 접속 경로를 찾을 때만 사용, 영상은 거치지 않음)
 const ICE = { iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }] }
 const CAN_SHARE = typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getDisplayMedia
 
-// 사이트 안 1:1 영상 수업 (WebRTC) + 화면 공유. 연결 신호는 Supabase Realtime으로 주고받습니다.
+// 사이트 안 1:1 영상 수업 (WebRTC) + 화면 공유 + 같이 쓰는 칠판
 export default function VideoLesson({ appId }) {
   const [state, setState] = useState('idle') // idle | starting | waiting | connected | error
   const [msg, setMsg] = useState('')
   const [micOn, setMicOn] = useState(true)
   const [camOn, setCamOn] = useState(true)
-  const [sharing, setSharing] = useState(false)       // 내가 화면 공유 중
+  const [sharing, setSharing] = useState(false)         // 내가 화면 공유 중
   const [remoteShare, setRemoteShare] = useState(false) // 상대가 화면 공유 중
+  const [board, setBoard] = useState(false)             // 칠판이 보이는 중
+  const [boardUsed, setBoardUsed] = useState(false)     // 칠판을 한 번이라도 열었는지 (닫아도 그림 유지)
   const localRef = useRef(null)
   const remoteRef = useRef(null)
   const live = useRef({}) // pc, stream, display, channel, id, pending
@@ -21,7 +24,7 @@ export default function VideoLesson({ appId }) {
   const send = (m) =>
     live.current.channel?.send({ type: 'broadcast', event: 'signal', payload: { ...m, from: live.current.id } })
 
-  // 통화 종료: 연결, 카메라, 화면 공유, 채널 정리
+  // 통화 종료: 연결, 카메라, 화면 공유, 채널, 칠판 정리
   const stop = () => {
     const L = live.current
     if (L.channel) supabase.removeChannel(L.channel)
@@ -33,6 +36,8 @@ export default function VideoLesson({ appId }) {
     if (remoteRef.current) remoteRef.current.srcObject = null
     setSharing(false)
     setRemoteShare(false)
+    setBoard(false)
+    setBoardUsed(false)
   }
   stopRef.current = stop
   useEffect(() => () => stopRef.current?.(), []) // 화면을 나가면 자동 종료
@@ -101,6 +106,9 @@ export default function VideoLesson({ appId }) {
         else (L.pending ||= []).push(p.data)
       } else if (p.type === 'share') {
         setRemoteShare(!!p.on)
+      } else if (p.type === 'board') {
+        // 상대가 칠판을 열면 내 화면에도 자동으로 열림
+        if (p.on) { setBoardUsed(true); setBoard(true) }
       } else if (p.type === 'leave') {
         L.pc?.close(); L.pc = null
         if (remoteRef.current) remoteRef.current.srcObject = null
@@ -152,6 +160,13 @@ export default function VideoLesson({ appId }) {
     else setCamOn((v) => !v)
   }
 
+  // 칠판 열기/닫기 (닫아도 그림은 유지됨)
+  const toggleBoard = () => {
+    const next = !board
+    setBoard(next)
+    if (next) { setBoardUsed(true); send({ type: 'board', on: true }) }
+  }
+
   // 화면 공유 끝내고 카메라로 되돌리기
   const stopShare = async () => {
     const L = live.current
@@ -186,6 +201,7 @@ export default function VideoLesson({ appId }) {
   }
 
   const idle = state === 'idle' || state === 'error'
+  const split = board && !idle
   return (
     <div className="card vl">
       <div className="app-top">
@@ -195,24 +211,33 @@ export default function VideoLesson({ appId }) {
       {idle && (
         <p className="muted" style={{ margin: '8px 0 0' }}>
           멘토와 신청자가 같은 시간에 각자 <strong>영상 수업 시작</strong>을 누르면 연결돼요. 영상은 서버에 저장되거나 녹화되지 않아요.
-          이어폰을 쓰면 소리가 울리지 않아요. PC에서는 <strong>화면 공유</strong>로 필기나 자료도 보여 줄 수 있어요.
+          수업 중에는 <strong>같이 쓰는 칠판</strong>과 PC <strong>화면 공유</strong>도 쓸 수 있어요. 이어폰을 쓰면 소리가 울리지 않아요.
         </p>
       )}
       {msg && <div className="err" role="alert" style={{ marginTop: 8 }}>{msg}</div>}
 
-      <div className={`vgrid ${idle ? 'hide' : ''}`}>
-        <video ref={remoteRef} className={remoteShare ? 'contain' : ''} autoPlay playsInline />
-        <video ref={localRef} className="me" autoPlay playsInline muted />
-        {sharing && <div className="vbadge">🖥 화면 공유 중</div>}
-        {state !== 'connected' && (
-          <div className="vwait">{state === 'starting' ? '카메라를 켜는 중...' : '상대방이 입장하기를 기다리고 있어요.'}</div>
-        )}
+      <div className={`stage ${split ? 'split' : ''}`}>
+        <div className={`vgrid ${idle ? 'hide' : ''}`}>
+          <video ref={remoteRef} className={remoteShare ? 'contain' : ''} autoPlay playsInline />
+          <video ref={localRef} className="me" autoPlay playsInline muted />
+          {sharing && <div className="vbadge">🖥 화면 공유 중</div>}
+          {state !== 'connected' && (
+            <div className="vwait">{state === 'starting' ? '카메라를 켜는 중...' : '상대방이 입장하기를 기다리고 있어요.'}</div>
+          )}
+        </div>
+        {boardUsed && !idle && <Whiteboard appId={appId} hidden={!board} />}
       </div>
+      {split && remoteShare && (
+        <p className="muted" style={{ margin: '8px 0 0', textAlign: 'center' }}>
+          상대가 화면을 공유 중이에요. 크게 보려면 <strong>칠판 닫기</strong>를 누르세요.
+        </p>
+      )}
 
       {!idle && (
         <div className="vbar">
           <button className="btn ghost sm" onClick={() => toggle('audio')}>{micOn ? '🎤 마이크 끄기' : '🔇 마이크 켜기'}</button>
           <button className="btn ghost sm" onClick={() => toggle('video')}>{camOn ? '📷 카메라 끄기' : '🚫 카메라 켜기'}</button>
+          <button className="btn ghost sm" aria-pressed={board} onClick={toggleBoard}>{board ? '🖍 칠판 닫기' : '🖍 칠판 열기'}</button>
           {CAN_SHARE && (
             sharing
               ? <button className="btn ghost sm" onClick={stopShare}>🖥 공유 멈추기</button>
