@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { Loading, ErrorBox } from '../components/Status'
+import VideoLesson from '../components/VideoLesson'
 
 const PHONE = /01[016789][-.\s]?\d{3,4}[-.\s]?\d{4}/
 const fmtDT = (t) => new Date(t).toLocaleString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit' })
@@ -227,7 +228,8 @@ export default function Room() {
       </div>
 
       <LessonCard appId={id} role={role} writable={writable} lesson={lesson} onSaved={setLesson} defaultMode={ctx.mode} />
-
+            {writable && (lesson ? lesson.mode === '온라인' : ctx.mode === '온라인') && <VideoLesson appId={id} />}
+            
       <div className="app-top" style={{ margin: '20px 0 8px' }}>
         <h3 style={{ margin: 0 }}>💬 대화</h3>
         <span>
