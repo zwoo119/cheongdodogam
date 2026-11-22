@@ -187,3 +187,10 @@ html{-webkit-text-size-adjust:100%}
   .stage.split{grid-template-columns:1fr}
   .stage.split .vgrid{aspect-ratio:16/9;max-height:220px;width:100%}
 }
+.faq{display:grid;gap:10px;max-width:760px}
+.faq details{background:#fff;border:1px solid var(--ln);border-radius:14px;padding:4px 18px}
+.faq summary{cursor:pointer;font-weight:700;padding:12px 0;list-style:none;display:flex;justify-content:space-between;gap:12px}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{content:'＋';color:var(--g);font-weight:800}
+.faq details[open] summary::after{content:'－'}
+.faq p{margin:0 0 14px;color:var(--mu)}
