@@ -9,9 +9,10 @@ const GRADES = ['초등 1~2학년', '초등 3~4학년', '초등 5~6학년', '중
 const MODES = ['온라인', '오프라인', '온·오프라인']
 const STATUS = { pending: ['승인 대기', 'w'], approved: ['공개 중', ''], rejected: ['반려', 'x'] }
 const MAX_ACTIVE = 3 // 대기·공개 프로필은 계정당 최대 3개
+const PHONE = /01[016789][-.\s]?\d{3,4}[-.\s]?\d{4}/
 
 const EMPTY = {
-  name: '', type: '대학생', field: FIELDS[0], bio: '', teach: '',
+  name: '', type: '대학생', field: FIELDS[0], bio: '', teach: '', affiliation: '', career: '',
   target: [], mode: '온라인', time: '', langs: ['한국어'], agree: false,
 }
 
@@ -59,6 +60,8 @@ export default function Register() {
     if (!time) return setErr('가능한 요일·시간을 입력해 주세요.')
     if (!f.langs.length) return setErr('지원 가능한 언어를 하나 이상 선택해 주세요.')
     if (!f.agree) return setErr('안내 사항 확인에 체크해 주세요.')
+    const affiliation = f.affiliation.trim(), career = f.career.trim()
+    if (PHONE.test(`${affiliation} ${career}`)) return setErr('전화번호는 입력할 수 없어요. 소속·경력에는 연락처를 적지 마세요.')  
     if (mine.filter((m) => m.status !== 'rejected').length >= MAX_ACTIVE)
       return setErr(`승인 대기·공개 중인 프로필은 최대 ${MAX_ACTIVE}개까지 등록할 수 있습니다.`)
 
@@ -66,6 +69,7 @@ export default function Register() {
     const { error } = await supabase.from('mentors').insert({
       owner_id: user.id, name, type: f.type, field: f.field, bio, teach,
       target: f.target, mode: f.mode, time, langs: f.langs,
+      affiliation: affiliation || null, career: career || null,
       tags: `${f.field} ${teach}`, status: 'pending',
     })
     setBusy(false)
@@ -111,6 +115,13 @@ export default function Register() {
         </label>
         <label>가르칠 수 있는 내용
           <input type="text" maxLength={80} value={f.teach} onChange={on('teach')} placeholder="예: 파이썬 기초, 웹페이지 만들기" />
+        </label>
+        <label>소속·학력 (선택, 40자 이내)
+          <input type="text" maxLength={40} value={f.affiliation} onChange={on('affiliation')} placeholder="예: 경북대학교 컴퓨터학부 재학" />
+        </label>
+        <label>경력·자격·활동 (선택, 한 줄에 하나씩)
+          <textarea rows={4} maxLength={300} value={f.career} onChange={on('career')}
+            placeholder={'예:\n정보처리기사 (2024)\n학생 코딩 봉사 2년\n교육 동아리 운영'} />
         </label>
         <div>
           <strong>멘토링 대상</strong>
