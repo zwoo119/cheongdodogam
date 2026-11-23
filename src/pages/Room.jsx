@@ -117,6 +117,61 @@ function LessonCard({ appId, role, writable, lesson, onSaved, defaultMode }) {
   )
 }
 
+/* ---------- 신고 창 ---------- */
+const REASONS = [
+  '개인정보·연락처를 요구해요',
+  '불쾌하거나 부적절한 말을 해요',
+  '수업과 관계없는 요청을 해요',
+  '약속을 지키지 않아요',
+  '기타',
+]
+
+function ReportDialog({ target, onClose, onSubmit }) {
+  const [cat, setCat] = useState('')
+  const [detail, setDetail] = useState('')
+  const [err, setErr] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  const submit = async (e) => {
+    e.preventDefault()
+    setErr('')
+    if (!cat) return setErr('신고 이유를 선택해 주세요.')
+    const reason = detail.trim() ? `${cat} - ${detail.trim()}` : cat
+    setBusy(true)
+    const msg = await onSubmit(reason)
+    setBusy(false)
+    if (msg) setErr(msg)
+  }
+
+  return (
+    <div className="modal-bg" onClick={onClose}>
+      <form className="card modal" onClick={(e) => e.stopPropagation()} onSubmit={submit} noValidate>
+        <h3 style={{ margin: 0 }}>{target ? '메시지 신고' : '대화 신고'}</h3>
+        {target && <div className="quote">“{target.body}”</div>}
+        <p className="muted" style={{ margin: 0 }}>
+          신고된 대화는 관리자가 안전 확인을 위해 열람해요. 신고 내용은 상대방에게 알려지지 않아요.
+        </p>
+        <div className="reasons" role="radiogroup" aria-label="신고 이유">
+          {REASONS.map((r) => (
+            <label key={r} className={`reason ${cat === r ? 'on' : ''}`}>
+              <input type="radio" name="reason" checked={cat === r} onChange={() => setCat(r)} /> {r}
+            </label>
+          ))}
+        </div>
+        <label>자세한 내용 (선택)
+          <input type="text" maxLength={120} value={detail} onChange={(e) => setDetail(e.target.value)}
+            placeholder="어떤 일이 있었는지 간단히 적어 주세요" />
+        </label>
+        {err && <div className="err" role="alert">{err}</div>}
+        <div>
+          <button className="btn danger sm" disabled={busy}>{busy ? '접수 중...' : '신고 접수'}</button>{' '}
+          <button type="button" className="btn ghost sm" onClick={onClose}>취소</button>
+        </div>
+      </form>
+    </div>
+  )
+}
+
 /* ---------- 소통방 ---------- */
 export default function Room() {
   const { id } = useParams()
@@ -131,6 +186,7 @@ export default function Room() {
   const [sending, setSending] = useState(false)
   const [sendErr, setSendErr] = useState('')
   const [notice, setNotice] = useState('')
+  const [rpt, setRpt] = useState(null) // 신고 창: null이면 닫힘, { msg } 이면 열림
   const endRef = useRef(null)
   const role = ctx?.role
 
@@ -193,15 +249,15 @@ export default function Room() {
     setMsgs((cur) => (cur.some((x) => x.id === data.id) ? cur : [...cur, data]))
   }
 
-  const report = async (m) => {
-    const reason = window.prompt(m ? '이 메시지를 신고하는 이유를 적어 주세요. (2~200자)' : '이 대화를 신고하는 이유를 적어 주세요. (2~200자)')
-    if (reason === null) return
-    const r = reason.trim()
-    setSendErr(''); setNotice('')
-    if (r.length < 2 || r.length > 200) return setSendErr('신고 사유는 2~200자로 입력해 주세요.')
-    const { error } = await supabase.from('reports').insert({ application_id: id, message_id: m?.id ?? null, reporter_id: user.id, reason: r })
-    if (error) { console.error(error); return setSendErr('신고하지 못했습니다.') }
-    setNotice('신고가 접수되었습니다. 관리자가 신고된 대화를 확인합니다.')
+  const submitReport = async (reason) => {
+   setSendErr(''); setNotice('')
+   const { error } = await supabase.from('reports').insert({
+     application_id: id, message_id: rpt?.msg?.id ?? null, reporter_id: user.id, reason,
+  })
+  if (error) { console.error(error); return '신고하지 못했습니다. 잠시 후 다시 시도해 주세요.' }
+  setRpt(null)
+  setNotice('신고가 접수되었습니다. 관리자가 신고된 대화를 확인합니다.')
+  return ''
   }
 
   if (loading) return <section className="sec"><Loading /></section>
@@ -221,7 +277,10 @@ export default function Room() {
   return (
     <section className="sec room">
       <Link to="/rooms" className="link">← 내 소통방</Link>
-      <h2 style={{ marginTop: 8 }}>{other}와의 소통방</h2>
+      <div className="app-top" style={{ marginTop: 8 }}>
+        <h2 style={{ margin: 0 }}>{other}와의 소통방</h2>
+        <button className="btn danger-o sm" onClick={() => setRpt({ msg: null })}>🚨 신고하기</button>
+      </div>
       <div className="notice">
         연락처·주소·SNS 아이디는 주고받지 마세요. 불편한 메시지는 <strong>신고</strong>할 수 있어요.
         오프라인 수업은 도서관·주민센터 같은 공공장소에서, 학생은 보호자와 함께 진행해 주세요.
@@ -234,7 +293,6 @@ export default function Room() {
         <h3 style={{ margin: 0 }}>💬 대화</h3>
         <span>
           <button className="link" onClick={() => setTick((t) => t + 1)}>↻ 새로고침</button>{' '}
-          <button className="link" onClick={() => report(null)}>대화 신고</button>
         </span>
       </div>
       {loadErr && <ErrorBox>{loadErr}</ErrorBox>}
@@ -246,7 +304,7 @@ export default function Room() {
             <div key={m.id} className={`msg ${me ? 'me' : ''}`}>
               <small>{me ? '나' : other} · {fmtT(m.created_at)}</small>
               <div className="bubble">{m.body}</div>
-              {!me && <button className="link rp" onClick={() => report(m)}>신고</button>}
+              {!me && <button className="btn danger-o sm rp" onClick={() => setRpt({ msg: m })}>🚨 신고</button>}
             </div>
           )
         })}
@@ -263,6 +321,7 @@ export default function Room() {
       ) : (
         <div className="notice">수업이 완료되어 대화가 종료되었어요. 지난 대화는 읽기만 할 수 있어요.</div>
       )}
+    {rpt && <ReportDialog target={rpt.msg} onClose={() => setRpt(null)} onSubmit={submitReport} />}
     </section>
   )
 }
