@@ -117,7 +117,7 @@ export default function Register() {
           <input type="text" maxLength={80} value={f.teach} onChange={on('teach')} placeholder="예: 파이썬 기초, 웹페이지 만들기" />
         </label>
         <label>소속·학력 (선택, 40자 이내)
-          <input type="text" maxLength={40} value={f.affiliation} onChange={on('affiliation')} placeholder="예: 경북대학교 컴퓨터학부 재학" />
+          <input type="text" maxLength={40} value={f.affiliation} onChange={on('affiliation')} placeholder="예: 경운대학교 소프트웨어학부 재학" />
         </label>
         <label>경력·자격·활동 (선택, 한 줄에 하나씩)
           <textarea rows={4} maxLength={300} value={f.career} onChange={on('career')}
