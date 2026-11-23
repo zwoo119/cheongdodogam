@@ -17,6 +17,8 @@ import Policy from './pages/Policy'
 import NotFound from './pages/NotFound'
 import Rooms from './pages/Rooms'
 import Room from './pages/Room'
+import ForgotPassword from './pages/ForgotPassword'
+import ResetPassword from './pages/ResetPassword'
 
 export default function App() {
   const { pathname } = useLocation()
@@ -35,6 +37,8 @@ export default function App() {
           <Route path="/terms" element={<Policy kind="terms" />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/apply/:id" element={<ProtectedRoute><Apply /></ProtectedRoute>} />
           <Route path="/register" element={<ProtectedRoute mentor><Register /></ProtectedRoute>} />
           <Route path="/history" element={<ProtectedRoute><History /></ProtectedRoute>} />

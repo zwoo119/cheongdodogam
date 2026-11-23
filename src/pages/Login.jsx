@@ -36,6 +36,7 @@ export default function Login() {
         </label>
         {err && <div className="err" role="alert">{err}</div>}
         <button className="btn" disabled={busy}>{busy ? '확인 중...' : '로그인'}</button>
+                <p className="muted" style={{ margin: 0 }}><Link to="/forgot-password" className="link">비밀번호를 잊으셨나요?</Link></p>
         <p className="muted" style={{ margin: 0 }}>아직 계정이 없나요? <Link to="/signup" className="link">회원가입</Link></p>
       </form>
     </section>
