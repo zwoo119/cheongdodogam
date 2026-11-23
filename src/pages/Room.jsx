@@ -187,6 +187,7 @@ export default function Room() {
   const [sendErr, setSendErr] = useState('')
   const [notice, setNotice] = useState('')
   const [rpt, setRpt] = useState(null) // 신고 창: null이면 닫힘, { msg } 이면 열림
+  const [sel, setSel] = useState(null) // 눌러서 선택한 메시지 id (신고 버튼 표시용) 
   const endRef = useRef(null)
   const role = ctx?.role
 
@@ -282,7 +283,7 @@ export default function Room() {
         <button className="btn danger-o sm" onClick={() => setRpt({ msg: null })}>🚨 신고하기</button>
       </div>
       <div className="notice">
-        연락처·주소·SNS 아이디는 주고받지 마세요. 불편한 메시지는 <strong>신고</strong>할 수 있어요.
+        연락처·주소·SNS 아이디는 주고받지 마세요. 불편한 메시지는 <strong>신고</strong>할 수 있어요. 상대 메시지를 누르면 그 메시지만 신고할 수 있어요.
         오프라인 수업은 도서관·주민센터 같은 공공장소에서, 학생은 보호자와 함께 진행해 주세요.
       </div>
 
@@ -303,8 +304,15 @@ export default function Room() {
           return (
             <div key={m.id} className={`msg ${me ? 'me' : ''}`}>
               <small>{me ? '나' : other} · {fmtT(m.created_at)}</small>
-              <div className="bubble">{m.body}</div>
-              {!me && <button className="btn danger-o sm rp" onClick={() => setRpt({ msg: m })}>🚨 신고</button>}
+              <div
+                className="bubble"
+                style={!me ? { cursor: 'pointer' } : undefined}
+                onClick={!me ? () => setSel(sel === m.id ? null : m.id) : undefined}
+              >{m.body}</div>
+              {!me && sel === m.id && (
+                <button className="link rp" style={{ color: '#c0392b' }}
+                  onClick={() => { setSel(null); setRpt({ msg: m }) }}>이 메시지 신고</button>
+              )}
             </div>
           )
         })}
