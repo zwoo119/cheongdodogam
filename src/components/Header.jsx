@@ -10,7 +10,8 @@ export default function Header() {
   const menu = [['/', '홈'], ['/find', '멘토 찾기']]
   if (!user || isMentor) menu.push(['/register', '멘토 등록']) // 멘티에게는 숨김
   menu.push(['/how', '이용 방법'])
-  if (user) menu.push(['/history', '신청 내역'], ['/rooms', '소통방'])
+  if (user && !isMentor) menu.push(['/history', '신청 내역']) // 멘토에게는 숨김
+  if (user) menu.push(['/rooms', '소통방'])
   if (isAdmin) menu.push(['/admin', '관리자'])
 
   return (
